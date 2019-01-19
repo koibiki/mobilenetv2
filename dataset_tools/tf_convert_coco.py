@@ -16,10 +16,11 @@ flags.DEFINE_string('tfrecord_name', 'coco_train', 'generated tfrecord file pref
 flags.DEFINE_boolean('ignore_difficult_instances', False,
                      'Whether to ignore difficult instances')
 
-FLAGS=flags.FLAGS
+FLAGS = flags.FLAGS
 
 RANDOM_SEED = 4242
 SAMPLES_PER_FILES = 1000
+
 
 def _process_image(data_dir, img_dir, ann_dir, img_name):
     '''
@@ -128,9 +129,9 @@ def main(shuffling=False):
       dataset_dir: The dataset directory where the dataset is stored.
       output_dir: Output directory.
     """
-    COCO_DIR=FLAGS.data_dir
-    IMG_DIR =FLAGS.img_dir
-    ANN_DIR =FLAGS.ann_dir
+    COCO_DIR = FLAGS.data_dir
+    IMG_DIR = FLAGS.img_dir
+    ANN_DIR = FLAGS.ann_dir
 
     if not tf.gfile.Exists(FLAGS.output_path):
         tf.gfile.MakeDirs(FLAGS.output_path)

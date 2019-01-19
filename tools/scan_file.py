@@ -4,10 +4,8 @@ import random
 
 from tqdm import *
 
-root_path = '../data/train'
-label_dict = {'cat': 0, 'dog': 1}
-
-
+root_path = '../../data/train'
+label_dict = {'cats': 0, 'dogs': 1}
 
 file_list = []
 label_list = []

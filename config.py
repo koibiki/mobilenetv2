@@ -1,34 +1,33 @@
-import argparse
+from easydict import EasyDict as edict
+import os
+import os.path as osp
 
+cfg = edict()
 
-parser = argparse.ArgumentParser(description="MobileNetV2")
-parser.add_mutually_exclusive_group(required=False)
+cfg.INPUT_SIZE = (224, 224, 3)
 
-parser.add_argument('--model_name', type=str, default='mobilenetv2')
-parser.add_argument('--dataset_dir', type=str, default='./tfrecords', help='tfrecord file dir')
-parser.add_argument('--num_samples', type=int, help='the number of train samples')
-parser.add_argument('--epoch', type=int, default=10)
-parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--num_classes', type=int)
-parser.add_argument('--height', type=int, default=224)
-parser.add_argument('--width', type=int, default=224)
-parser.add_argument('--is_train', dest='is_train', action='store_true')
-parser.add_argument('--is_test', dest='is_train', action='store_false')
-parser.add_argument('--learning_rate', type=float, default=0.001)
-parser.add_argument('--lr_decay', type=float, default=0.98)
-parser.add_argument('--weight_decay', type=float, default=1e-4)
-parser.add_argument('--beta1', type=float, default=0.9)
-parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
-parser.add_argument('--logs_dir', type=str, default='logs')
-parser.add_argument('--rand_crop', dest='rand_crop', action='store_true')
-parser.add_argument('--no_rand_crop', dest='rand_crop', action='store_false')
-parser.add_argument('--cpu', dest='cpu', action='store_true')
-parser.add_argument('--gpu', dest='cpu', action='store_false')
-parser.add_argument('--renew', dest='renew', action='store_true')
-# set default
-parser.set_defaults(is_train=True)
-parser.set_defaults(cpu=False)
-parser.set_defaults(rand_crop=False)
-parser.set_defaults(renew=False)
+cfg.PATH = edict()
+cfg.PATH.ROOT_DIR = os.getcwd()
+cfg.PATH.TBOARD_SAVE_DIR = osp.abspath(osp.join(os.getcwd(), 'logs'))
+cfg.PATH.MODEL_SAVE_DIR = osp.abspath(osp.join(os.getcwd(), 'checkpoints'))
+cfg.PATH.TFLITE_MODEL_SAVE_DIR = osp.abspath(osp.join(os.getcwd(), 'tf_lite_model'))
 
-args = parser.parse_args()
+cfg.TRAIN = edict()
+# TRAIN
+cfg.TRAIN = edict()
+cfg.TRAIN.BATCH_SIZE = 8
+cfg.TRAIN.INPUT_SHAPE = (cfg.TRAIN.BATCH_SIZE, cfg.INPUT_SIZE[0], cfg.INPUT_SIZE[1], cfg.INPUT_SIZE[2])
+cfg.TRAIN.NUM_COLOR_CLASS = 4
+cfg.TRAIN.LEARNING_RATE = 0.001
+cfg.TRAIN.LR_DECAY_STEPS = 10000
+cfg.TRAIN.LR_DECAY_RATE = 0.9
+cfg.TRAIN.EPOCHS = 500
+cfg.TRAIN.DISPLAY_STEP = 1
+cfg.TRAIN.SAVE_MODEL_STEP = 500
+cfg.TRAIN.GPU_MEMORY_FRACTION = 0.5
+cfg.TRAIN.TF_ALLOW_GROWTH = True
+
+# TEST
+cfg.TEST = edict()
+cfg.TEST.BATCH_SIZE = 1
+cfg.TEST.INPUT_SHAPE = (cfg.TEST.BATCH_SIZE, cfg.INPUT_SIZE[0], cfg.INPUT_SIZE[1], cfg.INPUT_SIZE[2])

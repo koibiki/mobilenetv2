@@ -30,10 +30,7 @@ def load_data(train_file):
 
 if __name__ == '__main__':
     # 解压后的 cifar-100-python 路径
-    cifar_python_directory = "../data/cifar10/cifar-10-batches-py"
+    cifar_python_directory = "../../data/cifar10/cifar-10-batches-py"
 
     datas, labels = load_data(osp.join(cifar_python_directory, 'data_batch_1'))
-    resize = cv2.resize(datas[1999], (224, 224))
-    cv2.imshow("test", resize)
-    cv2.waitKey(0)
     print('Converting...')

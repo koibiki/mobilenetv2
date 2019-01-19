@@ -66,15 +66,16 @@ def ssd_multibox_layer(inputs,
                            scope='conv_loc')
     loc_pred = custom_layers.channel_to_last(loc_pred)
     loc_pred = tf.reshape(loc_pred,
-                          tensor_shape(loc_pred, 4)[:-1]+[num_anchors, 4])
+                          tensor_shape(loc_pred, 4)[:-1] + [num_anchors, 4])
     # Class prediction.
     num_cls_pred = num_anchors * num_classes
     cls_pred = slim.conv2d(net, num_cls_pred, [3, 3], activation_fn=None,
                            scope='conv_cls')
     cls_pred = custom_layers.channel_to_last(cls_pred)
     cls_pred = tf.reshape(cls_pred,
-                          tensor_shape(cls_pred, 4)[:-1]+[num_anchors, num_classes])
+                          tensor_shape(cls_pred, 4)[:-1] + [num_anchors, num_classes])
     return cls_pred, loc_pred
+
 
 def ssd_losses(logits, localisations,
                gclasses, glocalisations, gscores,

@@ -5,7 +5,7 @@ weight_decay = 1e-5
 
 weights_init = tf.glorot_normal_initializer()
 bias_init = tf.zeros_initializer()
-l2_reg = None  # slim.l2_regularizer(weight_decay)
+l2_reg = slim.l2_regularizer(weight_decay)
 
 
 def conv2d_block(inputs, out_dim, k, s, is_train, name):
@@ -44,10 +44,4 @@ def res_block(inputs, filters, kernel, t, strides, is_train, name, shortcut=Fals
 
         if shortcut:
             net = inputs + net
-        return net
-
-
-def global_avg(x):
-    with tf.name_scope('global_avg'):
-        net = slim.avg_pool2d(x, x.get_shape()[1:-1], 1)
         return net

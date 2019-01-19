@@ -42,7 +42,7 @@ def create_tf_record(datas, tf_name):
 
 
 def main(_):
-    create_tf_record('train.txt', 'train.tfrecord')
+    create_tf_record('train.txt', '../tf_data/train.tfrecord')
 
 
 if __name__ == '__main__':

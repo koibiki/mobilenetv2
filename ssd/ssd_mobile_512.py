@@ -1,7 +1,7 @@
-import tensorflow as tf
-from ops import *
+from net.ops import *
 from ssd.utils import *
 from ssd.config import *
+
 
 def ssd_net(inputs):
     end_points = {}
@@ -76,10 +76,10 @@ def ssd_net(inputs):
         for i, layer in enumerate(feat_layers):
             with tf.variable_scope(layer + '_box'):
                 p, l = ssd_multibox_layer(end_points[layer],
-                                                      num_classes,
-                                                      anchor_sizes[i],
-                                                      anchor_ratios[i],
-                                                      normalizations[i])
+                                          num_classes,
+                                          anchor_sizes[i],
+                                          anchor_ratios[i],
+                                          normalizations[i])
             predictions.append(tf.nn.softmax(p))
             logits.append(p)
             localisations.append(l)

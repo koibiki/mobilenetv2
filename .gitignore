@@ -110,3 +110,5 @@ checkpoints/
 logs/
 train.tfrecord
 .idea/
+
+tf_data/
