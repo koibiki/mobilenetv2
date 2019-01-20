@@ -69,7 +69,8 @@ def create_tf_record(datas, tf_name):
 
 
 def main(_):
-    create_tf_record('seg_train.txt', '../tf_data/train.tfrecord')
+    #create_tf_record('seg_train.txt', '../tf_data/train.tfrecord')
+    create_tf_record('seg_test.txt', '../tf_data/test.tfrecord')
 
 
 if __name__ == '__main__':

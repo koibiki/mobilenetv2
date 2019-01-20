@@ -153,7 +153,7 @@ class MobileNetV2():
                     all_acc += np.sum(_acc)
 
                     pbar.set_description(
-                        'Epoch: {:4d}/{:4d} cost= {:9f} cross_c={:9f} l1_c={:9f} lr={:9} acc={:9f}'.format(
+                        'Epoch: {:4d}/{:4d} cost= {:9f} cross_c={:9f} l1_c={:9f} lr={:9f} acc={:9f}'.format(
                             epoch + 1,
                             train_epochs,
                             all_t_c / (_step + 1),

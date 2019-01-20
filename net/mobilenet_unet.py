@@ -9,7 +9,7 @@ from tqdm import *
 
 class Unet:
 
-    def __init__(self, num_class, is_train=True):
+    def __init__(self, num_class, is_train=True, restore=False):
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"
         self._batch_size = cfg.TRAIN.BATCH_SIZE if is_train else cfg.TEST.BATCH_SIZE
         self._input_shape = cfg.TRAIN.INPUT_SHAPE if is_train else cfg.TEST.INPUT_SHAPE
@@ -21,7 +21,7 @@ class Unet:
             self.out = self.build_unet(self._input, num_class, is_train)
             self.global_step = tf.Variable(0, trainable=False)
             self.saver, self.model_save_path = self.build_saver()
-            if not is_train:
+            if not is_train or restore:
                 self.load_model(self.sess, self.saver)
 
     def build_unet(self, _inputs, num_class, is_train):
@@ -66,7 +66,7 @@ class Unet:
 
     def build_optimizer(self, cost):
         starter_learning_rate = cfg.TRAIN.LEARNING_RATE
-        learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step, 10000, 0.9,
+        learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step, 50000, 0.95,
                                                    staircase=True)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
@@ -118,7 +118,7 @@ class Unet:
             raise 'Check your pretrained {:s}'.format(ckpt.model_checkpoint_path)
         return restore_iter
 
-    def train(self, images, labels, num_iterations):
+    def train(self, train_imgs, train_labels, train_num_iter, test_imgs, test_labels, test_num_iter):
         with self.sess.as_default():
             total_loss, cross_loss, reg_loss = self.build_loss(self.out, self._y)
 
@@ -141,27 +141,27 @@ class Unet:
 
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(sess=self.sess, coord=coord)
-
+            _global_step = 0
             for epoch in range(train_epochs):
                 all_acc = 0
                 all_t_c = 0
                 all_cross_c = 0
-                pbar = tqdm(range(num_iterations))
-                for _step in pbar:
-                    input_data, input_label = \
-                        self.sess.run([images, labels])
+                train_pbar = tqdm(range(train_num_iter))
+                for _step in train_pbar:
+                    test_data, test_label = \
+                        self.sess.run([train_imgs, train_labels])
 
                     summary, _, t_c, c_c, l1_c, _acc, _lr, pred_prob = self.sess.run(
                         [summary_op, optimizer, total_loss, cross_loss, reg_loss, acc_op, lr, self.out['pred']],
-                        feed_dict={self._input: input_data,
-                                   self._y: input_label})
+                        feed_dict={self._input: test_data,
+                                   self._y: test_label})
 
                     all_t_c += np.sum(t_c)
                     all_cross_c += np.sum(c_c)
                     all_acc += np.sum(_acc)
 
-                    pbar.set_description(
-                        'Epoch: {:4d}/{:4d} cost= {:9f} cross_c={:9f} l1_c={:9f} lr={:9} acc={:9f}'.format(
+                    train_pbar.set_description(
+                        'Epoch:{:3d}/{:3d} train cost= {:5f} cross_c={:5f} l1_c={:5f} lr={:5f} acc={:6f}'.format(
                             epoch + 1,
                             train_epochs,
                             all_t_c / (_step + 1),
@@ -170,14 +170,34 @@ class Unet:
                             _lr,
                             all_acc / (_step + 1)))
 
-                    _global_step = epoch * num_iterations + _step
-
-                    if _global_step % cfg.TRAIN.SAVE_MODEL_STEP == 0:
-                        tf.train.write_graph(self.sess.graph_def, 'checkpoints', 'net_txt.pb', as_text=True)
-                        self.saver.save(sess=self.sess, save_path=self.model_save_path, global_step=_global_step)
-
+                    _global_step = epoch * train_num_iter + _step
                     summary_writer.add_summary(summary=summary, global_step=_global_step)
 
-            coord.request_stop()
-            coord.join(threads=threads)
-            print('FINISHED TRAINING.')
+                test_pbar = tqdm(range(test_num_iter))
+                all_test_loss = 0
+                all_test_acc = 0
+                for _step in test_pbar:
+                    test_data, test_label = \
+                        self.sess.run([test_imgs, test_labels])
+
+                    test_c, test_acc = self.sess.run(
+                        [cross_loss, acc_op],
+                        feed_dict={self._input: test_data,
+                                   self._y: test_label})
+
+                    all_test_loss += np.sum(test_c)
+                    all_test_acc += np.sum(test_acc)
+
+                    test_pbar.set_description(
+                        'Epoch: {:4d}/{:4d} valid  cross_c={:9f} acc={:9f}'.format(
+                            epoch + 1,
+                            train_epochs,
+                            all_test_loss / (_step + 1),
+                            all_test_acc / (_step + 1)))
+
+                tf.train.write_graph(self.sess.graph_def, 'checkpoints', 'net_txt.pb', as_text=True)
+                self.saver.save(sess=self.sess, save_path=self.model_save_path, global_step=_global_step)
+
+        coord.request_stop()
+        coord.join(threads=threads)
+        print('FINISHED TRAINING.')
