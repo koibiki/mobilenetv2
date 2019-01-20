@@ -4,8 +4,8 @@ import os.path as osp
 
 cfg = edict()
 
-cfg.INPUT_SIZE = (224, 224, 3)
-
+# cfg.INPUT_SIZE = (224, 224, 3)
+cfg.INPUT_SIZE = (256, 256, 3)
 cfg.PATH = edict()
 cfg.PATH.ROOT_DIR = os.getcwd()
 cfg.PATH.TBOARD_SAVE_DIR = osp.abspath(osp.join(os.getcwd(), 'logs'))
@@ -15,9 +15,8 @@ cfg.PATH.TFLITE_MODEL_SAVE_DIR = osp.abspath(osp.join(os.getcwd(), 'tf_lite_mode
 cfg.TRAIN = edict()
 # TRAIN
 cfg.TRAIN = edict()
-cfg.TRAIN.BATCH_SIZE = 8
+cfg.TRAIN.BATCH_SIZE = 2
 cfg.TRAIN.INPUT_SHAPE = (cfg.TRAIN.BATCH_SIZE, cfg.INPUT_SIZE[0], cfg.INPUT_SIZE[1], cfg.INPUT_SIZE[2])
-cfg.TRAIN.NUM_COLOR_CLASS = 4
 cfg.TRAIN.LEARNING_RATE = 0.001
 cfg.TRAIN.LR_DECAY_STEPS = 10000
 cfg.TRAIN.LR_DECAY_RATE = 0.9

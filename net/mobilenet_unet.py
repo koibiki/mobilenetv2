@@ -7,44 +7,51 @@ import numpy as np
 from tqdm import *
 
 
-class MobileNetV2():
+class Unet:
 
     def __init__(self, num_class, is_train=True):
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"
         self._batch_size = cfg.TRAIN.BATCH_SIZE if is_train else cfg.TEST.BATCH_SIZE
         self._input_shape = cfg.TRAIN.INPUT_SHAPE if is_train else cfg.TEST.INPUT_SHAPE
         self._input = tf.placeholder(dtype=tf.float32, shape=self._input_shape, name='input')
-        self._y = tf.placeholder(dtype=tf.int32, shape=self._batch_size, name='y')
+        self._y = tf.placeholder(dtype=tf.int32, shape=(self._batch_size, self._input_shape[1] * self._input_shape[2]),
+                                 name='y')
         self.sess = self.build_sess()
         with self.sess.as_default():
-            self.out = self.build_mobilenetv2(self._input, num_class, is_train, 0.5 if is_train else 1.0)
+            self.out = self.build_unet(self._input, num_class, is_train)
             self.global_step = tf.Variable(0, trainable=False)
             self.saver, self.model_save_path = self.build_saver()
             if not is_train:
                 self.load_model(self.sess, self.saver)
 
-    def build_mobilenetv2(self, _inputs, num_class, is_train, keep_prob):
+    def build_unet(self, _inputs, num_class, is_train):
         with tf.variable_scope('mobilenetv2'):
-            conv1 = conv2d_block(_inputs, 32, 3, 2, is_train=is_train, name='conv1_1')
+            conv1 = conv2d_block(_inputs, 16, 3, 1, is_train=is_train, name='conv1_1')
 
-            res2 = inverted_res_block(conv1, 16, (3, 3), t=1, s=1, is_train=is_train, n=1, name='res2')
+            conv2 = conv2d_block(conv1, 16, 3, 2, is_train=is_train, name='conv2_1')
+
+            res2 = inverted_res_block(conv2, 16, (3, 3), t=1, s=2, is_train=is_train, n=2, name='res2')
             res3 = inverted_res_block(res2, 24, (3, 3), t=6, s=2, is_train=is_train, n=2, name='res3')
             res4 = inverted_res_block(res3, 32, (3, 3), t=6, s=2, is_train=is_train, n=3, name='res4')
             res5 = inverted_res_block(res4, 64, (3, 3), t=6, s=2, is_train=is_train, n=4, name='res5')
-            res6 = inverted_res_block(res5, 96, (3, 3), t=6, s=1, is_train=is_train, n=3, name='res6')
-            res7 = inverted_res_block(res6, 160, (3, 3), t=6, s=2, is_train=is_train, n=3, name='res7')
-            res8 = inverted_res_block(res7, 320, (3, 3), t=6, s=1, is_train=is_train, n=1, name='res8')
+            res6 = inverted_res_block(res5, 96, (3, 3), t=6, s=2, is_train=is_train, n=3, name='res7')
 
-            conv9 = conv2d_block(res8, 1280, 1, 1, is_train, name='conv9_1')
-            global_pool = slim.avg_pool2d(conv9, [7, 7])
-            dp = slim.dropout(global_pool, keep_prob=keep_prob, scope='dp')
-            logits = slim.conv2d(dp, num_class, 1, 1, activation_fn=None, scope='logits')
-            logits = slim.flatten(logits)
+            dec9 = decode(res6, res5, 96, (3, 3), t=6, s=1, is_train=is_train, n=2, name="dec9")
+            dec10 = decode(dec9, res4, 64, (3, 3), t=6, s=1, is_train=is_train, n=3, name="dec10")
+            dec11 = decode(dec10, res3, 32, (3, 3), t=6, s=1, is_train=is_train, n=2, name="dec11")
+            dec12 = decode(dec11, res2, 24, (3, 3), t=6, s=1, is_train=is_train, n=1, name="dec12")
+            dec13 = decode(dec12, conv2, 16, (3, 3), t=6, s=1, is_train=is_train, n=1, name="dec13")
+            dec14 = decode(dec13, conv1, 16, (3, 3), t=6, s=1, is_train=is_train, n=1, name="dec14")
+
+            logits = slim.conv2d(dec14, num_class, 1, 1, scope='logits')
+            logits = tf.reshape(logits, shape=(self._batch_size, -1, 2))
 
             pred = slim.softmax(logits, scope='prob')
 
-        out = {"conv1": conv1, "res2": res2, "res3": res3, "res4": res4, "res5": res5, "res6": res6, "res7": res7,
-               "res8": res8, "conv9": conv9, "global_pool": global_pool, "logits": logits, "pred": pred}
+        out = {"conv1": conv1, "conv2": conv2,
+               "res2": res2, "res3": res3, "res4": res4, "res5": res5, "res6": res6,
+               "dec9": dec9, "dec10": dec10, "dec11": dec11, "dec12": dec12, "dec13": dec13, "dec14": dec14,
+               "logits": logits, "pred": pred}
 
         return out
 
@@ -69,21 +76,22 @@ class MobileNetV2():
         return optimizer, learning_rate
 
     def build_evaluator(self, out, y):
-        correct_pred = tf.equal(tf.argmax(out["pred"], 1), tf.cast(y, tf.int64))
+        correct_pred = tf.equal(tf.argmax(out["pred"], axis=-1), tf.cast(y, tf.int64))
         acc = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
         return acc
 
-    def build_summary(self, total_cost, cost, learning_rate):
+    def build_summary(self, total_cost, acc, cost, learning_rate):
         os.makedirs(cfg.PATH.TBOARD_SAVE_DIR, exist_ok=True)
-        tf.summary.scalar(name='Total_Cost', tensor=tf.reduce_sum(total_cost))
         tf.summary.scalar(name='Cost', tensor=tf.reduce_sum(cost))
+        tf.summary.scalar(name='Acc', tensor=tf.reduce_sum(acc))
+        tf.summary.scalar(name='Total_Cost', tensor=tf.reduce_sum(total_cost))
         tf.summary.scalar(name='Learning_Rate', tensor=learning_rate)
         merge_summary_op = tf.summary.merge_all()
         return merge_summary_op
 
     def build_sess(self):
         sess_config = tf.ConfigProto()
-        sess_config.gpu_options.per_process_gpu_memory_fraction = 0.7
+        sess_config.gpu_options.per_process_gpu_memory_fraction = 1.0
         sess_config.gpu_options.allow_growth = True
         sess = tf.Session(config=sess_config)
         return sess
@@ -120,7 +128,7 @@ class MobileNetV2():
 
             acc_op = self.build_evaluator(self.out, self._y)
 
-            summary_op = self.build_summary(total_loss, cross_loss, lr)
+            summary_op = self.build_summary(total_loss, acc_op, cross_loss, lr)
 
             train_start_time = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time()))
             log_dir = osp.join(cfg.PATH.TBOARD_SAVE_DIR, train_start_time)

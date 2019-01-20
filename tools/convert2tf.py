@@ -18,13 +18,16 @@ def convert2example(line):
 
     image = cv2.imread(img_path)
 
+    if image is None:
+        return None
+
     img = cv2.resize(image, (224, 224))
 
     image_data = img.tobytes()
 
     example = tf.train.Example(features=tf.train.Features(feature={
         'image/encoded': bytes_feature(image_data),
-        'image/label': int64_feature(int(label))
+        'image/label': int64_feature([int(label)])
     }))
 
     return example
@@ -35,10 +38,11 @@ def create_tf_record(datas, tf_name):
     with tf.python_io.TFRecordWriter(tf_name) as tfWriter:
         with open(datas, 'r') as f:
             readlines = f.readlines()
-            for i in tqdm(range(len(readlines))):
+            for i in tqdm(range(100)):
                 example = convert2example(readlines[i])
-                tfWriter.write(example.SerializeToString())
-                num_samples += 1
+                if example is not  None:
+                    tfWriter.write(example.SerializeToString())
+                    num_samples += 1
 
 
 def main(_):

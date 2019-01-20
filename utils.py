@@ -15,7 +15,7 @@ def preprocess(image):
 
 # tfrecord example features
 def int64_feature(value):
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
 
 def int64_list_feature(value):
@@ -69,6 +69,47 @@ def read_tfrecord(filename_queue):
     img = tf.cast(img, tf.float32) * 1.0 / 255.
 
     return img, label
+
+
+# read tf_record
+def read_tfrecord_seg(filename_queue):
+    feature = {'image/encoded': tf.FixedLenFeature([], tf.string),
+               'image/label': tf.FixedLenFeature([256*256], tf.int64)
+               }
+
+    reader = tf.TFRecordReader()
+    _, serialized_example = reader.read(filename_queue)
+
+    features = tf.parse_single_example(serialized_example, features=feature)
+
+    image = tf.decode_raw(features['image/encoded'], tf.float32)
+    image = tf.cast(image, tf.float32)
+
+    label = tf.cast(features['image/label'], tf.int32)
+
+    img = tf.reshape(image, [256, 256, 3])
+
+    return img, label
+
+
+def get_batch_seg(infile, batch_size, num_threads=4, shuffle=True, min_after_dequeue=None):
+    # 使用batch，img的shape必须是静态常量
+    image, label = read_tfrecord_seg(infile)
+
+    if min_after_dequeue is None:
+        min_after_dequeue = batch_size * 10
+    capacity = min_after_dequeue + 3 * batch_size
+
+    if shuffle:
+        img_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size,
+                                                        capacity=capacity, num_threads=num_threads,
+                                                        min_after_dequeue=min_after_dequeue)
+    else:
+        img_batch, label_batch = tf.train.batch([image, label], batch_size,
+                                                capacity=capacity, num_threads=num_threads,
+                                                allow_smaller_final_batch=True)
+
+    return img_batch, label_batch
 
 
 def get_batch(infile, batch_size, num_threads=4, shuffle=True, min_after_dequeue=None):
