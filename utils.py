@@ -34,21 +34,17 @@ def float_list_feature(value):
     return tf.train.Feature(float_list=tf.train.FloatList(value=value))
 
 
-# read tf_record
-def read_tfrecord(filename_queue):
-    feature = {'image/encoded': tf.FixedLenFeature([], tf.string),
-               'image/label': tf.FixedLenFeature([], tf.int64)}
+def read_tfrecord_dataset(example_proto):
+    input_shape = [224, 224, 3]
+    features = {'image/encoded': tf.FixedLenFeature([], tf.string),
+                'image/label': tf.FixedLenFeature([], tf.int64)}
+    parsed_features = tf.parse_single_example(example_proto, features)
 
-    reader = tf.TFRecordReader()
-    _, serialized_example = reader.read(filename_queue)
+    image = tf.decode_raw(parsed_features['image/encoded'], tf.uint8)
+    h, w, c = input_shape
+    image = tf.reshape(image, [h, w, c])
 
-    features = tf.parse_single_example(serialized_example, features=feature)
-
-    image = tf.decode_raw(features['image/encoded'], tf.uint8)
-    image = tf.cast(image, tf.float32)
-    label = tf.cast(features['image/label'], tf.int32)
-    img = tf.reshape(image, [224, 224, 3])
-
+    label = parsed_features['image/label']
     # preprocess
     # subtract mean valu
     # rgb_mean=np.array([123.68, 116.779, 103.939])
@@ -66,67 +62,22 @@ def read_tfrecord(filename_queue):
     # img = img[j:j+224, i:i+224, :]
 
     # scale to 1
-    img = tf.cast(img, tf.float32) * 1.0 / 255.
-
-    return img, label
+    image = tf.cast(image, tf.float32) * 1.0 / 255.
+    return image, label,
 
 
 # read tf_record
-def read_tfrecord_seg(filename_queue):
-    feature = {'image/encoded': tf.FixedLenFeature([], tf.string),
-               'image/label': tf.FixedLenFeature([256*256], tf.int64)
-               }
+def read_tfrecord_seg_dataset(example_proto):
+    input_shape = [256, 256, 3]
+    features = {'image/encoded': tf.FixedLenFeature([], tf.string),
+                'image/label': tf.FixedLenFeature([256 * 256], tf.int64)}
 
-    reader = tf.TFRecordReader()
-    _, serialized_example = reader.read(filename_queue)
+    parsed_features = tf.parse_single_example(example_proto, features)
 
-    features = tf.parse_single_example(serialized_example, features=feature)
+    image = tf.decode_raw(parsed_features['image/encoded'], tf.uint8)
+    h, w, c = input_shape
+    image = tf.reshape(image, [h, w, c])
 
-    image = tf.decode_raw(features['image/encoded'], tf.float32)
-    image = tf.cast(image, tf.float32)
-
-    label = tf.cast(features['image/label'], tf.int32)
-
-    img = tf.reshape(image, [256, 256, 3])
-
-    return img, label
-
-
-def get_batch_seg(infile, batch_size, num_threads=4, shuffle=True, min_after_dequeue=None):
-    # 使用batch，img的shape必须是静态常量
-    image, label = read_tfrecord_seg(infile)
-
-    if min_after_dequeue is None:
-        min_after_dequeue = batch_size * 10
-    capacity = min_after_dequeue + 3 * batch_size
-
-    if shuffle:
-        img_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size,
-                                                        capacity=capacity, num_threads=num_threads,
-                                                        min_after_dequeue=min_after_dequeue)
-    else:
-        img_batch, label_batch = tf.train.batch([image, label], batch_size,
-                                                capacity=capacity, num_threads=num_threads,
-                                                allow_smaller_final_batch=True)
-
-    return img_batch, label_batch
-
-
-def get_batch(infile, batch_size, num_threads=4, shuffle=True, min_after_dequeue=None):
-    # 使用batch，img的shape必须是静态常量
-    image, label = read_tfrecord(infile)
-
-    if min_after_dequeue is None:
-        min_after_dequeue = batch_size * 10
-    capacity = min_after_dequeue + 3 * batch_size
-
-    if shuffle:
-        img_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size,
-                                                        capacity=capacity, num_threads=num_threads,
-                                                        min_after_dequeue=min_after_dequeue)
-    else:
-        img_batch, label_batch = tf.train.batch([image, label], batch_size,
-                                                capacity=capacity, num_threads=num_threads,
-                                                allow_smaller_final_batch=True)
-
-    return img_batch, label_batch
+    label = parsed_features['image/label']
+    image = tf.cast(image, tf.float32) * 1.0 / 255.
+    return image, label

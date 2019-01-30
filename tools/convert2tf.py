@@ -38,7 +38,7 @@ def create_tf_record(datas, tf_name):
     with tf.python_io.TFRecordWriter(tf_name) as tfWriter:
         with open(datas, 'r') as f:
             readlines = f.readlines()
-            for i in tqdm(range(100)):
+            for i in tqdm(range(len(readlines))):
                 example = convert2example(readlines[i])
                 if example is not  None:
                     tfWriter.write(example.SerializeToString())
@@ -46,7 +46,7 @@ def create_tf_record(datas, tf_name):
 
 
 def main(_):
-    create_tf_record('train.txt', '../tf_data/train.tfrecord')
+    create_tf_record('train.txt', '../tf_data/train_cat_dog.tfrecord')
 
 
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+from net.base_net import BaseNet
 from net.ops import *
 from config import cfg
 import os
@@ -5,14 +6,16 @@ import os.path as osp
 import time
 import numpy as np
 from tqdm import *
+import math
 
 
-class MobileNetV2():
+class MobileNetV2(BaseNet):
 
-    def __init__(self, num_class, is_train=True):
+    def __init__(self, num_class, is_train=True, weight_path=None):
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"
         self._batch_size = cfg.TRAIN.BATCH_SIZE if is_train else cfg.TEST.BATCH_SIZE
         self._input_shape = cfg.TRAIN.INPUT_SHAPE if is_train else cfg.TEST.INPUT_SHAPE
+        self.weight_path = weight_path
         self._input = tf.placeholder(dtype=tf.float32, shape=self._input_shape, name='input')
         self._y = tf.placeholder(dtype=tf.int32, shape=self._batch_size, name='y')
         self.sess = self.build_sess()
@@ -21,7 +24,7 @@ class MobileNetV2():
             self.global_step = tf.Variable(0, trainable=False)
             self.saver, self.model_save_path = self.build_saver()
             if not is_train:
-                self.load_model(self.sess, self.saver)
+                self.load_model(self.sess, self.saver, weight_path)
 
     def build_mobilenetv2(self, _inputs, num_class, is_train, keep_prob):
         with tf.variable_scope('mobilenetv2'):
@@ -57,17 +60,6 @@ class MobileNetV2():
 
         return total_loss, cross_loss, l2_loss
 
-    def build_optimizer(self, cost):
-        starter_learning_rate = cfg.TRAIN.LEARNING_RATE
-        learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step, 10000, 0.9,
-                                                   staircase=True)
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-
-        with tf.control_dependencies(update_ops):
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate) \
-                .minimize(loss=cost, global_step=self.global_step)
-        return optimizer, learning_rate
-
     def build_evaluator(self, out, y):
         correct_pred = tf.equal(tf.argmax(out["pred"], 1), tf.cast(y, tf.int64))
         acc = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
@@ -81,40 +73,11 @@ class MobileNetV2():
         merge_summary_op = tf.summary.merge_all()
         return merge_summary_op
 
-    def build_sess(self):
-        sess_config = tf.ConfigProto()
-        sess_config.gpu_options.per_process_gpu_memory_fraction = 0.7
-        sess_config.gpu_options.allow_growth = True
-        sess = tf.Session(config=sess_config)
-        return sess
-
-    def build_saver(self):
-        saver = tf.train.Saver(max_to_keep=3)
-        os.makedirs('./logs', exist_ok=True)
-        train_start_time = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time()))
-        model_name = 'net_{:s}.ckpt'.format(str(train_start_time))
-        model_save_path = osp.join(cfg.PATH.MODEL_SAVE_DIR, model_name)
-        return saver, model_save_path
-
-    def load_model(self, sess, saver):
-        restore_iter = 0
-        ckpt = tf.train.get_checkpoint_state(cfg.PATH.MODEL_SAVE_DIR)
-        try:
-            print('Restoring from {}...'.format(ckpt.model_checkpoint_path), end=' ')
-            saver.restore(sess, ckpt.model_checkpoint_path)
-            stem = os.path.splitext(os.path.basename(ckpt.model_checkpoint_path))[-1]
-            restore_iter = int(stem.split('-')[-1])
-            sess.run(self.global_step.assign(restore_iter))
-            print('done')
-        except:
-            raise 'Check your pretrained {:s}'.format(ckpt.model_checkpoint_path)
-        return restore_iter
-
-    def train(self, images, labels, num_iterations):
+    def train(self, parse_func, train_tf_record_path, valid_tf_record_path=None):
         with self.sess.as_default():
             total_loss, cross_loss, reg_loss = self.build_loss(self.out, self._y)
 
-            optimizer, lr = self.build_optimizer(total_loss)
+            optimizer, lr = self.build_optimizer(total_loss, self.global_step)
 
             train_epochs = cfg.TRAIN.EPOCHS
 
@@ -131,17 +94,21 @@ class MobileNetV2():
 
             self.sess.run(tf.global_variables_initializer())
 
-            coord = tf.train.Coordinator()
-            threads = tf.train.start_queue_runners(sess=self.sess, coord=coord)
+            train_example, train_iterator = self.build_train_dataset(self.sess, train_tf_record_path, parse_func)
+            train_data_amount = self.get_tf_data_amount(train_tf_record_path)
+            train_num_iter = int(math.ceil(train_data_amount / cfg.TRAIN.BATCH_SIZE))
+
+            if valid_tf_record_path is not None:
+                valid_example, valid_iterator = self.build_valid_dataset(self.sess, valid_tf_record_path, parse_func)
+                valid_data_amount = self.get_tf_data_amount(valid_tf_record_path)
 
             for epoch in range(train_epochs):
                 all_acc = 0
                 all_t_c = 0
                 all_cross_c = 0
-                pbar = tqdm(range(num_iterations))
+                pbar = tqdm(range(train_num_iter))
                 for _step in pbar:
-                    input_data, input_label = \
-                        self.sess.run([images, labels])
+                    input_data, input_label = self.sess.run(train_example)
 
                     summary, _, t_c, c_c, l1_c, _acc, _lr, pred_prob = self.sess.run(
                         [summary_op, optimizer, total_loss, cross_loss, reg_loss, acc_op, lr, self.out['pred']],
@@ -152,17 +119,13 @@ class MobileNetV2():
                     all_cross_c += np.sum(c_c)
                     all_acc += np.sum(_acc)
 
-                    pbar.set_description(
-                        'Epoch: {:4d}/{:4d} cost= {:9f} cross_c={:9f} l1_c={:9f} lr={:9f} acc={:9f}'.format(
-                            epoch + 1,
-                            train_epochs,
-                            all_t_c / (_step + 1),
-                            all_cross_c / (_step + 1),
-                            np.sum(l1_c),
-                            _lr,
-                            all_acc / (_step + 1)))
+                    sesc_str = 'Epoch: {:4d}/{:4d} cost= {:9f} cross_c={:9f} l1_c={:9f} lr={:9f} acc={:9f}'.format(
+                        epoch + 1, train_epochs, all_t_c / (_step + 1), all_cross_c / (_step + 1), np.sum(l1_c), _lr,
+                        all_acc / (_step + 1))
 
-                    _global_step = epoch * num_iterations + _step
+                    pbar.set_description(sesc_str)
+
+                    _global_step = epoch * train_num_iter + _step
 
                     if _global_step % cfg.TRAIN.SAVE_MODEL_STEP == 0:
                         tf.train.write_graph(self.sess.graph_def, 'checkpoints', 'net_txt.pb', as_text=True)
@@ -170,6 +133,4 @@ class MobileNetV2():
 
                     summary_writer.add_summary(summary=summary, global_step=_global_step)
 
-            coord.request_stop()
-            coord.join(threads=threads)
             print('FINISHED TRAINING.')

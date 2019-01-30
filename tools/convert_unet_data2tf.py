@@ -42,7 +42,6 @@ def convert2example(line):
         im[diff:diff + new_height, :, :] = img
         lim[diff:diff + new_height, :, :] = label_img
     lim = lim[:, :, 0]
-    # im = np.float32(im) / 127.5 - 1
     im = np.float32(im) - mean
     im = np.array(im, dtype=np.float32)
     lim = np.reshape(lim, (width * height))

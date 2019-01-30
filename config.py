@@ -4,15 +4,13 @@ import os.path as osp
 
 cfg = edict()
 
-# cfg.INPUT_SIZE = (224, 224, 3)
-cfg.INPUT_SIZE = (256, 256, 3)
+cfg.INPUT_SIZE = (224, 224, 3)
 cfg.PATH = edict()
 cfg.PATH.ROOT_DIR = os.getcwd()
 cfg.PATH.TBOARD_SAVE_DIR = osp.abspath(osp.join(os.getcwd(), 'logs'))
 cfg.PATH.MODEL_SAVE_DIR = osp.abspath(osp.join(os.getcwd(), 'checkpoints'))
 cfg.PATH.TFLITE_MODEL_SAVE_DIR = osp.abspath(osp.join(os.getcwd(), 'tf_lite_model'))
 
-cfg.TRAIN = edict()
 # TRAIN
 cfg.TRAIN = edict()
 cfg.TRAIN.BATCH_SIZE = 2
